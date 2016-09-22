@@ -20,10 +20,12 @@ import pickle
 import re
 import socket
 import struct
+import sys
 import time
 from datetime import datetime, timedelta
 
 from boto3.session import Session
+from botocore.exceptions import BotoCoreError
 
 
 def sanatize_string(string, keep_dots=False):
@@ -51,20 +53,29 @@ def get_spot_prices(ec2, interval, graphite_prefix, product_descriptions):
     returns a list of pickle-compatible tuples.
     """
     now = datetime.utcnow()
-    response = ec2.describe_spot_price_history(
-        StartTime=now - timedelta(minutes=interval),
-        EndTime=now,
-        ProductDescriptions=product_descriptions
-    )
-
-    items = response['SpotPriceHistory']
-    while 'NextToken' in response and response['NextToken']:
+    try:
         response = ec2.describe_spot_price_history(
             StartTime=now - timedelta(minutes=interval),
             EndTime=now,
-            ProductDescriptions=product_descriptions,
-            NextToken=response['NextToken']
+            ProductDescriptions=product_descriptions
         )
+    except BotoCoreError as exc:
+        logging.error("Failed to fetch spot prices: %s", exc)
+        sys.exit(1)
+
+    items = response['SpotPriceHistory']
+    while 'NextToken' in response and response['NextToken']:
+        try:
+            response = ec2.describe_spot_price_history(
+                StartTime=now - timedelta(minutes=interval),
+                EndTime=now,
+                ProductDescriptions=product_descriptions,
+                NextToken=response['NextToken']
+            )
+        except BotoCoreError as exc:
+            logging.error("Failed to fetch spot prices: %s", exc)
+            sys.exit(1)
+
         items += response['SpotPriceHistory']
 
     metrics = []
@@ -89,21 +100,27 @@ def send_to_graphite(metrics, host, port):
     header = struct.pack("!L", len(payload))
     message = header + payload
 
-    sock = socket.socket()
     try:
+        sock = socket.socket()
         sock.connect((host, port))
+        sock.sendall(message)
     except socket.error:
-        raise SystemExit("Couldn't connect to %s on port %d. "
-                         "Is carbon-cache.py running?" % (host, port))
+        logging.error("Connection to Graphite on %s port %d failed.",
+                      host,
+                      port)
+        sys.exit(1)
+    finally:
+        sock.close()
 
-    sock.sendall(message)
-    sock.close()
-    logging.debug("Metrics sent successfully to Graphite.")
+    logging.info("Successfully sent %i spot prices to Graphite.",
+                 len(metrics))
 
 
 def main():
     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
                         level='ERROR')
+    logging.getLogger('botocore').setLevel(logging.CRITICAL)
+
     parser = argparse.ArgumentParser(description='Script to pull the EC2 spot price history '
                                                  'out of AWS and push it into Graphite.')
     parser.add_argument('--aws-access-key-id', dest='aws_access_key_id',
@@ -140,9 +157,12 @@ def main():
                                'aws_secret_access_key',
                                'profile_name',
                                'region_name']}
-    session = Session(**session_args)
-
-    ec2 = session.client('ec2')
+    try:
+        session = Session(**session_args)
+        ec2 = session.client('ec2')
+    except BotoCoreError as exc:
+        logging.error("Connecting to the EC2 API failed: %s", exc)
+        sys.exit(1)
 
     product_descriptions = [product.strip() for product in args.product_descriptions.split(',')]
     metrics = get_spot_prices(ec2, args.interval, args.graphite_prefix, product_descriptions)
