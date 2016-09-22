@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Author: Daniel Roschka <daniel@smaato.com>
@@ -7,15 +7,11 @@ Copyright: Smaato Inc. 2016
 Script to fetch EC2 spot price history via the AWS API and to push it into
 Graphite.
 
-Attention: The DescribeSpotPriceHistory API call seems to behave funny and
-always returns a multiple of 1000 of results. As there are even for 1 minute
-more than 1000 values, some instance type combinations will be skipped.
-Therefore it's best to limit the query somehow, e.g. by only fetching certain
-product descriptions.
-
-# TODO:
-- Exponential Backoff (AWS API call + Graphite)
-- Kompatibilität für Lambda
+Attention: AWS only publishes new data points when the price changed. So if the
+price for an instance type is pretty static it can happen that it doesn't get
+updated for multiple hours or days, leading to pretty long gaps in Graphite.
+Best display is achieving by using Grafana and their staircase line option
+(which behaves differently from Graphites).
 """
 
 import argparse
@@ -81,7 +77,7 @@ def get_spot_prices(ec2, interval, graphite_prefix, product_descriptions):
             sanatize_string(item['InstanceType']),
             sanatize_string(item['ProductDescription'])
         )
-        timestamp = int(time.mktime(item['Timestamp'].timetuple()))
+        timestamp = int(item['Timestamp'].timestamp())
         value = float(item['SpotPrice'])
         logging.debug('%s %s %s', path, timestamp, value)
         metrics.append((path, (timestamp, value)))
