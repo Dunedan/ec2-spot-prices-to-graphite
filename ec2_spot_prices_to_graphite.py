@@ -31,19 +31,16 @@ from botocore.exceptions import BotoCoreError
 def sanatize_string(string, keep_dots=False):
     """Replace characters in the given string.
 
-    Characters which shouldn't appear in the Graphite metric name get replaced.
+    Alter given strings so the result could be used as a Graphite metric name.
     """
     if keep_dots:
         pattern1 = re.compile(r'\s')
     else:
         pattern1 = re.compile(r'[\s\.]')
-    pattern2 = re.compile(r'[\/]')
-    pattern3 = re.compile(r'[^a-zA-Z_\-0-9\.]')
-    string = string.lower()
     string = re.sub(pattern1, r'_', string)
-    string = re.sub(pattern2, r'-', string)
-    string = re.sub(pattern3, r'', string)
-    return string
+    string = re.sub(re.compile(r'[\/]'), r'-', string)
+    string = re.sub(re.compile(r'[^a-zA-Z_\-0-9\.]'), r'', string)
+    return string.lower()
 
 
 def get_spot_prices(ec2, interval, graphite_prefix, product_descriptions):
