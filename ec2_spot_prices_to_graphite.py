@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Author: Daniel Roschka <daniel@smaato.com>
-Copyright: Smaato Inc. 2016
-
-Script to fetch EC2 spot price history via the AWS API and to push it into
-Graphite.
+Fetch EC2 spot price history via the AWS API and to push it into Graphite.
 
 Attention: AWS only publishes new data points when the price changed. So if the
 price for an instance type is pretty static it can happen that it doesn't get
 updated for multiple hours or days, leading to pretty long gaps in Graphite.
 Best display is achieving by using Grafana and their staircase line option
 (which behaves differently from Graphites).
+
+Author: Daniel Roschka <daniel@smaato.com>
+Copyright: Smaato Inc. 2016
 """
 
 import argparse
@@ -21,7 +20,6 @@ import re
 import socket
 import struct
 import sys
-import time
 from datetime import datetime, timedelta
 
 from boto3.session import Session
@@ -93,6 +91,7 @@ def get_spot_prices(ec2, interval, graphite_prefix, product_descriptions):
 
 
 def send_to_graphite(metrics, host, port):
+    """Send metrics to Graphite."""
     payload = pickle.dumps(metrics, protocol=2)
     header = struct.pack("!L", len(payload))
     message = header + payload
@@ -118,33 +117,39 @@ def main():
                         level='ERROR')
     logging.getLogger('botocore').setLevel(logging.CRITICAL)
 
-    parser = argparse.ArgumentParser(description='Script to pull the EC2 spot price history '
-                                                 'out of AWS and push it into Graphite.')
+    parser = argparse.ArgumentParser(description='Script to pull the EC2 spot price history out '
+                                     'of AWS and push it into Graphite.')
     parser.add_argument('--aws-access-key-id', dest='aws_access_key_id',
-                        help='Specify a value here if you want to use a different ' +
+                        help='Specify a value here if you want to use a different '
                         'AWS_ACCESS_KEY_ID than configured in the AWS CLI.')
-    parser.add_argument('--aws-secret-access-key', dest='aws_secret_access_key',
-                        help='Specify a value here if you want to use a different ' +
+    parser.add_argument('--aws-secret-access-key',
+                        dest='aws_secret_access_key',
+                        help='Specify a value here if you want to use a different '
                         'AWS_SECRET_ACCESS_KEY than configured in the AWS CLI.')
     parser.add_argument('--profile', dest='profile_name',
                         help='The AWS CLI profile to use. Defaults to the default profile.')
     parser.add_argument('--region', dest='region_name', default='us-east-1',
-                        help='The AWS region to connect to. Defaults to the one configured for ' +
-                        'the AWS CLI.')
+                        help='The AWS region to connect to. Defaults to the '
+                        'one configured for the AWS CLI.')
     parser.add_argument('--interval', dest='interval', default=1, required=False, type=int,
-                        help='The interval in minutes back from now to gather prices for. Defaults to 1 minute.')
+                        help='The interval in minutes back from now to gather '
+                        'prices for. Defaults to 1 minute.')
     parser.add_argument('--products', dest='product_descriptions',
                         default='Linux/UNIX (Amazon VPC), Windows (Amazon VPC)', required=False,
-                        help='A comma separated list of products to fetch. Defauls to ' +
-                             '"Linux/UNIX (Amazon VPC), Windows (Amazon VPC)"')
+                        help='A comma separated list of products to fetch. '
+                        'Defauls to "Linux/UNIX (Amazon VPC), Windows (Amazon VPC)"')
     parser.add_argument('--log-level', dest='log_level', default='ERROR', required=False,
                         help='The log level to log messages with. Defaults to ERROR.')
-    parser.add_argument('--graphite-host', dest='graphite_host', default='localhost', required=False,
+    parser.add_argument('--graphite-host', dest='graphite_host',
+                        default='localhost', required=False,
                         help='The graphite host to send the metrics to. Defaults to localhost.')
-    parser.add_argument('--graphite-port', dest='graphite_port', default=2004, required=False, type=int,
+    parser.add_argument('--graphite-port', dest='graphite_port', default=2004,
+                        required=False, type=int,
                         help='The graphite port to send the metrics to. Defaults to 2004.')
-    parser.add_argument('--graphite-prefix', dest='graphite_prefix', default='aws.ec2.spot-price', required=False,
-                        help='A prefix to prepend to the metric name. Defaults to "aws.ec2.spot-price".')
+    parser.add_argument('--graphite-prefix', dest='graphite_prefix',
+                        default='aws.ec2.spot-price', required=False,
+                        help='A prefix to prepend to the metric name. Defaults'
+                        'to "aws.ec2.spot-price".')
     args = parser.parse_args()
 
     logging.getLogger().setLevel(args.log_level)
