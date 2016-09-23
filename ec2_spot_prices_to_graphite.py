@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Fetch EC2 spot price history via the AWS API and to push it into Graphite.
@@ -20,10 +20,22 @@ import re
 import socket
 import struct
 import sys
+import time
 from datetime import datetime, timedelta
 
+import pytz
 from boto3.session import Session
 from botocore.exceptions import BotoCoreError
+
+
+def py2_timestamp(dt_obj):
+    """Return POSIX timestamp as float.
+
+    Only necessary for Python 2, as Python 3 already includes a proper
+    timestamp function.
+    """
+    epoch = datetime(1970, 1, 1, tzinfo=pytz.UTC)
+    return (dt_obj - epoch).total_seconds()
 
 
 def sanatize_string(string, keep_dots=False):
@@ -83,7 +95,10 @@ def get_spot_prices(ec2, interval, graphite_prefix, product_descriptions):
             sanatize_string(item['InstanceType']),
             sanatize_string(item['ProductDescription'])
         )
-        timestamp = int(item['Timestamp'].timestamp())
+        try:
+            timestamp = int(item['Timestamp'].timestamp())
+        except AttributeError:
+            timestamp = int(py2_timestamp(item['Timestamp']))
         value = float(item['SpotPrice'])
         logging.debug('%s %s %s', path, timestamp, value)
         metrics.append((path, (timestamp, value)))
