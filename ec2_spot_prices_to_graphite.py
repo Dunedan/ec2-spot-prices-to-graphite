@@ -153,7 +153,7 @@ def main():
                         default='Linux/UNIX (Amazon VPC), Windows (Amazon VPC)', required=False,
                         help='A comma separated list of products to fetch. '
                         'Defauls to "Linux/UNIX (Amazon VPC), Windows (Amazon VPC)"')
-    parser.add_argument('--log-level', dest='log_level', default='ERROR', required=False,
+    parser.add_argument('--log-level', dest='log_level', default='INFO', required=False,
                         help='The log level to log messages with. Defaults to ERROR.')
     parser.add_argument('--graphite-host', dest='graphite_host',
                         default='localhost', required=False,
