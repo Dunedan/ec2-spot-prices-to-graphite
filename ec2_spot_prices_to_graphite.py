@@ -180,6 +180,8 @@ def main():
     except BotoCoreError as exc:
         logging.error("Connecting to the EC2 API failed: %s", exc)
         sys.exit(1)
+    else:
+        logging.debug("Connection to EC2 API established.")
 
     product_descriptions = [product.strip() for product in args.product_descriptions.split(',')]
     metrics = get_spot_prices(ec2, args.interval, args.graphite_prefix, product_descriptions)
